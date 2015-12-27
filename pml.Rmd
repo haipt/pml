@@ -1,0 +1,88 @@
+---
+title: "Weight Lifting Analysis"
+author: "Hai Pham"
+date: "24 December 2015"
+output: html_document
+---
+#Executive Summary
+In this report we will study data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants and use them to predict the manner in which they did the exercise.
+
+#Load Data
+Load necessary libraries
+```{r}
+library(randomForest)
+library(caret)
+train <- read.csv('pml-training.csv')
+test <- read.csv('pml-testing.csv')
+```
+
+- Number of samples in train data: `r nrow(train)`.
+- Number of samples in test data: `r nrow(test)`.
+- Number of features: `r length(colnames(train))-1`.
+
+#Cleanup Data
+We notice that some columns have mostly NAs or blank values, which will not be useful in our prediction model. So we will take out all the columns that have more than 10000 NAs or blank values
+```{r}
+features <- sapply(train, function(x) {
+  na_count <- sum(is.na(x));
+  blank_count <- sum(x == '');
+  #print(na_count);
+  return (na_count < 10000 & blank_count < 10000)
+})
+train_cleaned <- train[, features]
+```
+
+
+We also to drop the first 7 features which are irrelevant to the activity type, like user_name, timestamps, window
+```{r}
+train_cleaned <- train_cleaned[, -c(1:7)]
+```
+
+The number of features left is ```r length(colnames(train_cleaned))```. 
+
+The value classe that we needs to predict based on the rest of features:
+```{r}
+table(train_cleaned$classe)
+```
+
+#Train the model
+As this is a classification problem with high number of features, random forest is a very suitable candidate. All features are numeric types, so we also do not need further data preprocessing.
+
+Normally for random forest we do not really need to perform cross-validation to get out of sample error (as random forest training algorithm has built-in Out Of Bag estimation of error rate based on random sampling), but for the sake of this project requirement we will still perform it.
+
+First, create a training and testing data set by splitting the train_cleaned data 75% - 25%
+```{r}
+trainIndex <- createDataPartition(train_cleaned$classe, p=0.75, list = F)
+training <- train_cleaned[trainIndex, ]
+testing <- train_cleaned[-trainIndex, ]
+```
+
+Train the model to predict classe outcome based on all other features, we just use default parmeters for mtry and  trees
+```{r}
+m0 <- randomForest(classe ~ . , data = training, importance = T)
+print(m0)
+```
+Note that OOB estimate of error rate is 0.44%, which indicates that the model performs pretty well (higher than 99% accuracy)
+
+Next, test this model on the hold-out test set
+```{r}
+p0 <- predict(m0, testing)
+1.0 - sum(p0 == testing$classe) / nrow(testing)
+```
+The error rate of the test set is consistent with the OOB estimate.
+
+###Predict classe values in the test set
+We rebuild the model on all the training data, and used it to predict the actual test set.
+```{r}
+m <- randomForest(classe ~ . , data = train_cleaned)
+p <- predict(m, test)
+```
+Predicted classe values:
+```{r}
+print(p)
+```
+
+
+
+
+
